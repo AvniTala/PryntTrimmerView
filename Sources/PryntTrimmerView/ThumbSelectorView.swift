@@ -11,7 +11,7 @@ import AVFoundation
 
 /// A delegate to be notified of when the thumb position has changed. Useful to link an instance of the ThumbSelectorView to a
 /// video preview like an `AVPlayer`.
-public protocol ThumbSelectorViewDelegate: AnyObject {
+public protocol ThumbSelectorViewDelegate: class {
     func didChangeThumbPosition(_ imageTime: CMTime)
 }
 
@@ -63,7 +63,7 @@ public class ThumbSelectorView: AVAssetTimeSelector {
         thumbView.layer.borderColor = thumbBorderColor.cgColor
         thumbView.isUserInteractionEnabled = true
         thumbView.contentMode = .scaleAspectFill
-        thumbView.clipsToBounds = true
+        thumbView.clipsToBounds = false
         addSubview(thumbView)
 
         leftThumbConstraint = thumbView.leftAnchor.constraint(equalTo: leftAnchor)
