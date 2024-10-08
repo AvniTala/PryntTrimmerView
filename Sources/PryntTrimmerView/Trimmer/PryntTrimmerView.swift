@@ -132,19 +132,19 @@ public protocol TrimmerViewDelegate: class {
     public func setSlider(){
         let width = leftHandleView.frame.width
         let Height = leftHandleView.frame.height
-        leftImageSlider.frame = CGRect(x: 0, y: 5, width: width, height: Height-10)
+        leftImageSlider.frame = CGRect(x: 0, y: 0, width: width, height: Height)
         leftHandleView.addSubview(leftImageSlider)
         
         let width1 = rightHandleView.frame.width
         let Height1 = rightHandleView.frame.height
-        rightImageSlider.frame = CGRect(x: 0, y: 5, width: width1, height: Height1-10)
+        rightImageSlider.frame = CGRect(x: 0, y: 0, width: width1, height: Height1)
         rightHandleView.addSubview(rightImageSlider)
     }
     
     public func setpossitionSlider(){
         let width = positionBar.frame.width
         let Height = positionBar.frame.height
-        possitionImageSlider.frame = CGRect(x: -width/2, y: 5, width: width, height: Height-10)
+        possitionImageSlider.frame = CGRect(x: -width/2, y: 0, width: width, height: Height)
         positionBar.addSubview(possitionImageSlider)
     }
     override func constrainAssetPreview() {
@@ -233,13 +233,13 @@ public protocol TrimmerViewDelegate: class {
     }
 
     private func setupPositionBar() {
-        positionBar.frame = CGRect(x: 0, y: 0, width: 10, height: frame.height)
+        positionBar.frame = CGRect(x: 0, y: 0, width: 1.5, height: frame.height)
         positionBar.translatesAutoresizingMaskIntoConstraints = false
         positionBar.isUserInteractionEnabled = false
         addSubview(positionBar)
 
         positionBar.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
-        positionBar.widthAnchor.constraint(equalToConstant: 10).isActive = true
+        positionBar.widthAnchor.constraint(equalToConstant: 1.5).isActive = true
         positionBar.heightAnchor.constraint(equalTo: heightAnchor).isActive = true
         positionConstraint = positionBar.leftAnchor.constraint(equalTo: leftHandleView.rightAnchor)
         positionConstraint?.isActive = true
