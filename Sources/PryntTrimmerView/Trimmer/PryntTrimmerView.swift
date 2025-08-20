@@ -9,9 +9,9 @@
 import AVFoundation
 import UIKit
 
-public protocol TrimmerViewDelegate: class {
-    func didChangePositionBar(_ playerTime: CMTime, leftConst : CGFloat,rightConst : CGFloat)
-    func positionBarStoppedMoving(_ playerTime: CMTime, leftConst : CGFloat,rightConst : CGFloat)
+public protocol TrimmerViewDelegate: AnyObject {
+    func didChangePositionBar(_ playerTime: CMTime, StartTime: CMTime, EndTime: CMTime, leftConst: CGFloat, rightConst: CGFloat)
+    func positionBarStoppedMoving(_ playerTime: CMTime, StartTime: CMTime, EndTime: CMTime, leftConst: CGFloat, rightConst: CGFloat)
 }
 
 /// A view to select a specific time range of a video. It consists of an asset preview with thumbnails inside a scroll view, two
@@ -20,31 +20,68 @@ public protocol TrimmerViewDelegate: class {
 /// Load the video by setting the `asset` property. Access the `startTime` and `endTime` of the view to get the selected time
 // range
 @IBDesignable public class TrimmerView: AVAssetTimeSelector {
+    public var fixedStartTime: Double?   // nil ⇒ no limit
+    /// Highest time (in seconds) the right handle can reach.
+    public var fixedEndTime:   Double?
+    
+    private var pixelsPerSecond: CGFloat {
+        guard duration.seconds > 0 else { return 0 }
+        return assetPreview.contentView.frame.width / CGFloat(duration.seconds)
+    }
+
+    private var minLeftX: CGFloat {
+        guard let t = fixedStartTime else { return 0 }
+        return CGFloat(t) * pixelsPerSecond
+    }
+
+    private var maxRightX: CGFloat {
+        guard let t = fixedEndTime else { return frame.width }
+        return CGFloat(t) * pixelsPerSecond
+    }
 
     // MARK: - Properties
 
     // MARK: Color Customization
 
     /// The color of the main border of the view
-//    @IBInspectable public var mainColor: UIColor = UIColor.orange {
-//        didSet {
-//            updateMainColor()
-//        }
-//    }
+    @IBInspectable public var mainColor: UIColor = UIColor.orange {
+        didSet {
+            updateMainColor()
+        }
+    }
 
     /// The color of the handles on the side of the view
-//    @IBInspectable public var handleColor: UIColor = UIColor.gray {
-//        didSet {
-//           updateHandleColor()
-//        }
-//    }
+    @IBInspectable public var handleColor: UIColor = UIColor.gray {
+        didSet {
+           updateHandleColor()
+        }
+    }
+    
+    @IBInspectable public var isMove: Bool = true {
+        didSet {
+            if isMove {
+                setupGestures()
+            } else {
+                if leftHandleView.gestureRecognizers != nil {
+                    for i in leftHandleView.gestureRecognizers! {
+                        leftHandleView.removeGestureRecognizer(i)
+                    }
+                }
+                if rightHandleView.gestureRecognizers != nil {
+                    for i in rightHandleView.gestureRecognizers! {
+                        rightHandleView.removeGestureRecognizer(i)
+                    }
+                }
+            }
+        }
+    }
 
     /// The color of the position indicator
-//    @IBInspectable public var positionBarColor: UIColor = UIColor.white {
-//        didSet {
-//            positionBar.backgroundColor = positionBarColor
-//        }
-//    }
+    @IBInspectable public var positionBarColor: UIColor = UIColor.white {
+        didSet {
+            positionBar.backgroundColor = positionBarColor
+        }
+    }
 
     /// The color used to mask unselected parts of the video
     @IBInspectable public var maskColor: UIColor = UIColor.white {
@@ -53,118 +90,107 @@ public protocol TrimmerViewDelegate: class {
             rightMaskView.backgroundColor = maskColor
         }
     }
+    
+    @IBInspectable public var leftImage: String = "ic_slider_1" {
+        didSet {
+            leftImageView.image = UIImage(named: leftImage)
+        }
+    }
+
+    @IBInspectable public var righttImage: String = "ic_slider_2" {
+        didSet {
+            rightImageView.image = UIImage(named: righttImage)
+        }
+    }
+    
+    @IBInspectable public var isthumbImageSet: Bool = false {
+        didSet {
+            leftHandleView.backgroundColor = mainColor
+            rightHandleView.backgroundColor = mainColor
+            leftImageView.image = nil
+            rightImageView.image = nil
+        }
+    }
 
     // MARK: Interface
 
     public weak var delegate: TrimmerViewDelegate?
-
+    public var duration = CMTime.zero
+    
     // MARK: Subviews
 
-    private let trimView = UIView()
-    private let leftHandleView = HandlerView()
-    private let rightHandleView = HandlerView()
-    public let positionBar = UIView()
+    public let trimView = UIView()
+    public let leftHandleView = HandlerView()
+    public let rightHandleView = HandlerView()
+    private let positionBar = UIView()
     private let leftHandleKnob = UIView()
     private let rightHandleKnob = UIView()
     private let leftMaskView = UIView()
     private let rightMaskView = UIView()
 
+    public let leftImageView = UIImageView()
+    public let rightImageView = UIImageView()
+
     // MARK: Constraints
 
     private var currentLeftConstraint: CGFloat = 0
     private var currentRightConstraint: CGFloat = 0
-    private var leftConstraint: NSLayoutConstraint?
-    private var rightConstraint: NSLayoutConstraint?
+    public var leftConstraint: NSLayoutConstraint?
+    public var rightConstraint: NSLayoutConstraint?
     private var positionConstraint: NSLayoutConstraint?
-    public var leftImageSlider = UIImageView()
-    public var rightImageSlider = UIImageView()
-    public var possitionImageSlider = UIImageView()
 
     private let handleWidth: CGFloat = 15
 
     /// The minimum duration allowed for the trimming. The handles won't pan further if the minimum duration is attained.
-    public var minDuration: Double = 4
+    public var minDuration: Double = 3
 
     // MARK: - View & constraints configurations
 
     override func setupSubviews() {
         super.setupSubviews()
         layer.cornerRadius = 2
-        layer.masksToBounds = true
-        backgroundColor = UIColor.clear
+        layer.masksToBounds = false
+        backgroundColor = .white
         layer.zPosition = 1
         setupTrimmerView()
         setupHandleView()
         setupMaskView()
         setupPositionBar()
-        setupGestures()
-        
-    }
-    @IBInspectable public var leftSlider: String = "ic_slide"{
-        didSet {
-            leftImageSlider.image = UIImage(named: leftSlider)
-        }
-    }
-    @IBInspectable public var rightSlider: String = "ic_slide"{
-        didSet {
-            rightImageSlider.image = UIImage(named: rightSlider)
-        }
-    }
-    @IBInspectable public var possitionSlider: String = "ic_music_slid"{
-        didSet {
-            possitionImageSlider.image = UIImage(named: possitionSlider)
-        }
+        updateMainColor()
+        updateHandleColor()
+        self.assetPreview.isScrollEnabled = false
     }
     
-    @IBInspectable public var contenThumbMode: UIView.ContentMode = .scaleAspectFit{
-        didSet {
-            leftImageSlider.contentMode = contenThumbMode
-            rightImageSlider.contentMode = contenThumbMode
-        }
-    }
-    
-    @IBInspectable public var frameColor: UIColor = .white{
-        didSet {
-            trimView.layer.borderColor = frameColor.cgColor
-        }
-    }
-    
-    public func setSlider(){
+    public func setupHandleImage() {
         let width = leftHandleView.frame.width
-        let Height = leftHandleView.frame.height
-        leftImageSlider.frame = CGRect(x: 0, y: 5, width: width, height: Height-10)
-        leftHandleView.addSubview(leftImageSlider)
+        let height = leftHandleView.frame.height
+        leftImageView.frame = CGRect(x: -width/2, y: 0, width: width, height: height)
+        leftHandleView.addSubview(leftImageView)
         
         let width1 = rightHandleView.frame.width
-        let Height1 = rightHandleView.frame.height
-        rightImageSlider.frame = CGRect(x: 0, y: 5, width: width1, height: Height1-10)
-        rightHandleView.addSubview(rightImageSlider)
+        let height1 = rightHandleView.frame.height
+        rightImageView.frame = CGRect(x: width/2, y: 0, width: width1, height: height1)
+        rightHandleView.addSubview(rightImageView)
     }
-    
-    public func setpossitionSlider(){
-        let width = positionBar.frame.width
-        let Height = positionBar.frame.height
-        possitionImageSlider.frame = CGRect(x: -width/2, y: 5, width: width, height: Height-10)
-        positionBar.addSubview(possitionImageSlider)
-    }
+
     override func constrainAssetPreview() {
-        assetPreview.leftAnchor.constraint(equalTo: leftAnchor, constant: handleWidth).isActive = true
-        assetPreview.rightAnchor.constraint(equalTo: rightAnchor, constant: -handleWidth).isActive = true
+        assetPreview.leftAnchor.constraint(equalTo: leftAnchor).isActive = true
+        assetPreview.rightAnchor.constraint(equalTo: rightAnchor).isActive = true
         assetPreview.topAnchor.constraint(equalTo: topAnchor).isActive = true
         assetPreview.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
     }
 
     private func setupTrimmerView() {
         trimView.layer.borderWidth = 2.0
-        trimView.layer.cornerRadius = 5.0
+        trimView.layer.cornerRadius = 2.0
         trimView.translatesAutoresizingMaskIntoConstraints = false
         trimView.isUserInteractionEnabled = false
         addSubview(trimView)
 
         trimView.topAnchor.constraint(equalTo: topAnchor).isActive = true
         trimView.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
-        leftConstraint = trimView.leftAnchor.constraint(equalTo: leftAnchor,constant: 20)
-        rightConstraint = trimView.rightAnchor.constraint(equalTo: rightAnchor,constant: -20)
+        leftConstraint = trimView.leftAnchor.constraint(equalTo: leftAnchor)
+        rightConstraint = trimView.rightAnchor.constraint(equalTo: rightAnchor)
         leftConstraint?.isActive = true
         rightConstraint?.isActive = true
     }
@@ -178,16 +204,16 @@ public protocol TrimmerViewDelegate: class {
 
         leftHandleView.heightAnchor.constraint(equalTo: heightAnchor).isActive = true
         leftHandleView.widthAnchor.constraint(equalToConstant: handleWidth).isActive = true
-        leftHandleView.centerXAnchor.constraint(equalTo: trimView.leftAnchor).isActive = true
+        leftHandleView.leftAnchor.constraint(equalTo: trimView.leftAnchor).isActive = true
         leftHandleView.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
 
         leftHandleKnob.translatesAutoresizingMaskIntoConstraints = false
         leftHandleView.addSubview(leftHandleKnob)
 
         leftHandleKnob.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.5).isActive = true
-        leftHandleKnob.widthAnchor.constraint(equalToConstant: 0).isActive = true
+        leftHandleKnob.widthAnchor.constraint(equalToConstant: 2).isActive = true
         leftHandleKnob.centerYAnchor.constraint(equalTo: leftHandleView.centerYAnchor).isActive = true
-        leftHandleKnob.centerXAnchor.constraint(equalTo: leftHandleView.trailingAnchor).isActive = true
+        leftHandleKnob.centerXAnchor.constraint(equalTo: leftHandleView.centerXAnchor).isActive = true
 
         rightHandleView.isUserInteractionEnabled = true
         rightHandleView.layer.cornerRadius = 2.0
@@ -196,52 +222,55 @@ public protocol TrimmerViewDelegate: class {
 
         rightHandleView.heightAnchor.constraint(equalTo: heightAnchor).isActive = true
         rightHandleView.widthAnchor.constraint(equalToConstant: handleWidth).isActive = true
-        rightHandleView.centerXAnchor.constraint(equalTo: trimView.rightAnchor).isActive = true
+        rightHandleView.rightAnchor.constraint(equalTo: trimView.rightAnchor).isActive = true
         rightHandleView.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
 
         rightHandleKnob.translatesAutoresizingMaskIntoConstraints = false
         rightHandleView.addSubview(rightHandleKnob)
 
         rightHandleKnob.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.5).isActive = true
-        rightHandleKnob.widthAnchor.constraint(equalToConstant: 0).isActive = true
+        rightHandleKnob.widthAnchor.constraint(equalToConstant: 2).isActive = true
         rightHandleKnob.centerYAnchor.constraint(equalTo: rightHandleView.centerYAnchor).isActive = true
-        rightHandleKnob.centerXAnchor.constraint(equalTo: rightHandleView.leadingAnchor).isActive = true
+        rightHandleKnob.centerXAnchor.constraint(equalTo: rightHandleView.centerXAnchor).isActive = true
     }
 
     private func setupMaskView() {
+
         leftMaskView.isUserInteractionEnabled = false
-        leftMaskView.backgroundColor = .white
-        leftMaskView.alpha = 0.3
+        leftMaskView.backgroundColor = .white.withAlphaComponent(0.7)
         leftMaskView.translatesAutoresizingMaskIntoConstraints = false
         insertSubview(leftMaskView, belowSubview: leftHandleView)
 
         leftMaskView.leftAnchor.constraint(equalTo: leftAnchor).isActive = true
         leftMaskView.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
         leftMaskView.topAnchor.constraint(equalTo: topAnchor).isActive = true
-        leftMaskView.rightAnchor.constraint(equalTo: leftHandleView.centerXAnchor).isActive = true
+        leftMaskView.rightAnchor.constraint(equalTo: leftHandleView.leftAnchor).isActive = true
 
         rightMaskView.isUserInteractionEnabled = false
-        rightMaskView.backgroundColor = .white
-        rightMaskView.alpha = 0.3
+        rightMaskView.backgroundColor = .white.withAlphaComponent(0.7)
         rightMaskView.translatesAutoresizingMaskIntoConstraints = false
         insertSubview(rightMaskView, belowSubview: rightHandleView)
 
         rightMaskView.rightAnchor.constraint(equalTo: rightAnchor).isActive = true
         rightMaskView.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
         rightMaskView.topAnchor.constraint(equalTo: topAnchor).isActive = true
-        rightMaskView.leftAnchor.constraint(equalTo: rightHandleView.centerXAnchor).isActive = true
+        rightMaskView.leftAnchor.constraint(equalTo: rightHandleView.rightAnchor).isActive = true
     }
-
+    
     private func setupPositionBar() {
-        positionBar.frame = CGRect(x: 0, y: 0, width: 10, height: frame.height)
+
+        positionBar.frame = CGRect(x: 0, y: 0, width: 3, height: frame.height)
+        positionBar.backgroundColor = positionBarColor
+        positionBar.center = CGPoint(x: leftHandleView.frame.maxX, y: center.y)
+        positionBar.layer.cornerRadius = 1
         positionBar.translatesAutoresizingMaskIntoConstraints = false
         positionBar.isUserInteractionEnabled = false
         addSubview(positionBar)
 
         positionBar.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
-        positionBar.widthAnchor.constraint(equalToConstant: 10).isActive = true
+        positionBar.widthAnchor.constraint(equalToConstant: 3).isActive = true
         positionBar.heightAnchor.constraint(equalTo: heightAnchor).isActive = true
-        positionConstraint = positionBar.leftAnchor.constraint(equalTo: leftHandleView.rightAnchor)
+        positionConstraint = positionBar.leftAnchor.constraint(equalTo: leftHandleView.rightAnchor, constant: 0)
         positionConstraint?.isActive = true
     }
 
@@ -252,18 +281,19 @@ public protocol TrimmerViewDelegate: class {
         let rightPanGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(TrimmerView.handlePanGesture))
         rightHandleView.addGestureRecognizer(rightPanGestureRecognizer)
     }
-    
 
-//    private func updateMainColor() {
-//        trimView.layer.borderColor = mainColor.cgColor
+    private func updateMainColor() {
+        trimView.layer.borderColor = mainColor.cgColor
 //        leftHandleView.backgroundColor = mainColor
 //        rightHandleView.backgroundColor = mainColor
-//    }
-//
-//    private func updateHandleColor() {
-//        leftHandleKnob.backgroundColor = handleColor
-//        rightHandleKnob.backgroundColor = handleColor
-//    }
+    }
+
+    private func updateHandleColor() {
+        if isthumbImageSet {
+            leftHandleKnob.backgroundColor = handleColor
+            rightHandleKnob.backgroundColor = handleColor
+        }
+    }
 
     // MARK: - Trim Gestures
 
@@ -299,18 +329,41 @@ public protocol TrimmerViewDelegate: class {
         default: break
         }
     }
-
+    
     private func updateLeftConstraint(with translation: CGPoint) {
-        let maxConstraint = max(rightHandleView.frame.origin.x - handleWidth - minimumDistanceBetweenHandle, 0)
-        let newConstraint = min(max(0, currentLeftConstraint + translation.x), maxConstraint)
+        // current constraint + drag translation → proposed X
+        let proposed = max(0, currentLeftConstraint + translation.x)
+
+        // don’t let it cross the right handle *or* the fixed start
+        let logicalMax = rightHandleView.frame.origin.x - handleWidth - minimumDistanceBetweenHandle
+        let physicalMin = minLeftX - assetPreview.contentOffset.x       // fixedStart in local coords
+        let newConstraint = min(max(physicalMin, proposed), logicalMax)
+
         leftConstraint?.constant = newConstraint
     }
 
     private func updateRightConstraint(with translation: CGPoint) {
-        let maxConstraint = min(2 * handleWidth - frame.width + leftHandleView.frame.origin.x + minimumDistanceBetweenHandle, 0)
-        let newConstraint = max(min(0, currentRightConstraint + translation.x), maxConstraint)
+        let proposed = min(0, currentRightConstraint + translation.x)
+
+        // don’t let it cross the left handle *or* the fixed end
+        let logicalMin = leftHandleView.frame.origin.x + handleWidth + minimumDistanceBetweenHandle - frame.width
+        let physicalMax = -(frame.width - maxRightX + assetPreview.contentOffset.x) // fixedEnd in local coords
+        let newConstraint = max(min(physicalMax, proposed), logicalMin)
+
         rightConstraint?.constant = newConstraint
     }
+
+//    private func updateLeftConstraint(with translation: CGPoint) {
+//        let maxConstraint = max(rightHandleView.frame.origin.x - handleWidth - minimumDistanceBetweenHandle, 0)
+//        let newConstraint = min(max(0, currentLeftConstraint + translation.x), maxConstraint)
+//        leftConstraint?.constant = newConstraint
+//    }
+//
+//    private func updateRightConstraint(with translation: CGPoint) {
+//        let maxConstraint = min(2 * handleWidth - frame.width + leftHandleView.frame.origin.x + minimumDistanceBetweenHandle, 0)
+//        let newConstraint = max(min(0, currentRightConstraint + translation.x), maxConstraint)
+//        rightConstraint?.constant = newConstraint
+//    }
 
     // MARK: - Asset loading
 
@@ -329,7 +382,7 @@ public protocol TrimmerViewDelegate: class {
 
     /// Move the position bar to the given time.
     public func seek(to time: CMTime) {
-        if let newPosition = getPosition(from: time) {
+        if let newPosition = getPosition(from: time, duration: self.duration) {
 
             let offsetPosition = newPosition - assetPreview.contentOffset.x - leftHandleView.frame.origin.x
             let maxPosition = rightHandleView.frame.origin.x - (leftHandleView.frame.origin.x + handleWidth)
@@ -339,33 +392,18 @@ public protocol TrimmerViewDelegate: class {
             layoutIfNeeded()
         }
     }
-    
-    // Move the left trimmer handle to the given time.
-       public func moveLeftHandle(to time: CMTime) {
-           if let newPosition = getPosition(from: time) {
-               updateLeftConstraint(with: CGPoint(x: newPosition - currentLeftConstraint, y: 0))
-               updateSelectedTime(stoppedMoving: true)
-           }
-       }
-
-       /// Move the right trimmer handle to the given time.
-       public func moveRightHandle(to time: CMTime) {
-           if let newPosition = getPosition(from: time) {
-               updateRightConstraint(with: CGPoint(x: newPosition - frame.width - currentRightConstraint + 2 * handleWidth, y: 0))
-               updateSelectedTime(stoppedMoving: true)
-           }
-       }
 
     /// The selected start time for the current asset.
     public var startTime: CMTime? {
         let startPosition = leftHandleView.frame.origin.x + assetPreview.contentOffset.x
-        return getTime(from: startPosition)
+        return getTime(from: startPosition, duration: self.duration)
     }
 
     /// The selected end time for the current asset.
     public var endTime: CMTime? {
-        let endPosition = rightHandleView.frame.origin.x + assetPreview.contentOffset.x - handleWidth
-        return getTime(from: endPosition)
+        rightHandleView.layoutIfNeeded()
+        let endPosition = rightHandleView.frame.maxX + assetPreview.contentOffset.x //- handleWidth
+        return getTime(from: endPosition, duration: self.duration)
     }
 
     private func updateSelectedTime(stoppedMoving: Bool) {
@@ -373,20 +411,20 @@ public protocol TrimmerViewDelegate: class {
             return
         }
         if stoppedMoving {
-            delegate?.positionBarStoppedMoving(playerTime, leftConst:leftConstraint!.constant,rightConst: rightConstraint!.constant)
+            delegate?.positionBarStoppedMoving(playerTime, StartTime: startTime!, EndTime: endTime!, leftConst: leftConstraint!.constant, rightConst: rightConstraint!.constant)
         } else {
-            delegate?.didChangePositionBar(playerTime, leftConst:leftConstraint!.constant,rightConst: rightConstraint!.constant)
+            delegate?.didChangePositionBar(playerTime, StartTime: startTime!, EndTime: endTime!, leftConst: leftConstraint!.constant, rightConst: rightConstraint!.constant)
         }
     }
 
     private var positionBarTime: CMTime? {
         let barPosition = positionBar.frame.origin.x + assetPreview.contentOffset.x - handleWidth
-        return getTime(from: barPosition)
+        return getTime(from: barPosition, duration: self.duration)
     }
 
     private var minimumDistanceBetweenHandle: CGFloat {
-        guard let asset = asset else { return 0 }
-        return CGFloat(minDuration) * assetPreview.contentView.frame.width / CGFloat(asset.duration.seconds)
+//        guard let asset = asset else { return 0 }
+        return CGFloat(minDuration) * assetPreview.contentView.frame.width / CGFloat(duration.seconds)
     }
 
     // MARK: - Scroll View Delegate

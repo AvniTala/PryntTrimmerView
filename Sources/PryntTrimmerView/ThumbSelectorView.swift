@@ -11,7 +11,7 @@ import AVFoundation
 
 /// A delegate to be notified of when the thumb position has changed. Useful to link an instance of the ThumbSelectorView to a
 /// video preview like an `AVPlayer`.
-public protocol ThumbSelectorViewDelegate: class {
+public protocol ThumbSelectorViewDelegate: AnyObject {
     func didChangeThumbPosition(_ imageTime: CMTime)
 }
 
@@ -48,7 +48,7 @@ public class ThumbSelectorView: AVAssetTimeSelector {
 
         dimmingView.translatesAutoresizingMaskIntoConstraints = false
         dimmingView.isUserInteractionEnabled = false
-        dimmingView.backgroundColor = UIColor.white.withAlphaComponent(0.7)
+        dimmingView.backgroundColor = UIColor.white
         addSubview(dimmingView)
         dimmingView.leftAnchor.constraint(equalTo: leftAnchor).isActive = true
         dimmingView.rightAnchor.constraint(equalTo: rightAnchor).isActive = true
@@ -63,7 +63,7 @@ public class ThumbSelectorView: AVAssetTimeSelector {
         thumbView.layer.borderColor = thumbBorderColor.cgColor
         thumbView.isUserInteractionEnabled = true
         thumbView.contentMode = .scaleAspectFill
-        thumbView.clipsToBounds = false
+        thumbView.clipsToBounds = true
         addSubview(thumbView)
 
         leftThumbConstraint = thumbView.leftAnchor.constraint(equalTo: leftAnchor)
@@ -160,7 +160,7 @@ public class ThumbSelectorView: AVAssetTimeSelector {
     /// The currently selected time of the asset.
     public var selectedTime: CMTime? {
         let thumbPosition = thumbView.center.x + assetPreview.contentOffset.x - (thumbView.frame.width / 2)
-        return getTime(from: thumbPosition)
+        return getTime(from: thumbPosition, duration: .zero)
     }
 
     private func updateSelectedTime() {

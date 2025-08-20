@@ -16,6 +16,9 @@ class AssetVideoScrollView: UIScrollView {
     let contentView = UIView()
     public var maxDuration: Double = 15
     private var generator: AVAssetImageGenerator?
+    
+    var thumnailHeight: CGFloat = 50
+    var thumbnailWidth: CGFloat = 50
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -32,7 +35,7 @@ class AssetVideoScrollView: UIScrollView {
         backgroundColor = .clear
         showsVerticalScrollIndicator = false
         showsHorizontalScrollIndicator = false
-        clipsToBounds = false
+        clipsToBounds = true
 
         contentView.backgroundColor = .clear
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -51,40 +54,60 @@ class AssetVideoScrollView: UIScrollView {
         contentSize = contentView.bounds.size
     }
 
-    internal func regenerateThumbnails(for asset: AVAsset) {
-        guard let thumbnailSize = getThumbnailFrameSize(from: asset), thumbnailSize.width != 0 else {
+//    internal func regenerateThumbnails(for asset: AVAsset, duration: Float! = 1.0) {
+//        guard let thumbnailSize = getThumbnailFrameSize(from: asset) else {
+//            print("Could not calculate the thumbnail size.")
+//            return
+//        }
+//
+//        generator?.cancelAllCGImageGeneration()
+//        removeFormerThumbnails()
+//        let newContentSize = setContentSize(for: asset, duration: duration)
+//        let visibleThumbnailsCount = Int(ceil(frame.width / thumbnailSize.width))
+//        let thumbnailCount = Int(ceil(newContentSize.width / thumbnailSize.width))
+//        addThumbnailViews(thumbnailCount, size: thumbnailSize)
+//        let timesForThumbnail = getThumbnailTimes(for: asset, numberOfThumbnails: thumbnailCount)
+//        generateImages(for: asset, at: timesForThumbnail, with: thumbnailSize, visibleThumnails: visibleThumbnailsCount)
+//    }
+
+    func regenerateThumbnails(for asset: AVAsset, startTime: Float64 = 0.0, duration: Float! = 1.0) {
+        guard let thumbnailSize = getThumbnailFrameSize(from: asset) else {
             print("Could not calculate the thumbnail size.")
             return
         }
 
         generator?.cancelAllCGImageGeneration()
         removeFormerThumbnails()
-        let newContentSize = setContentSize(for: asset)
+        let newContentSize = setContentSize(for: asset, duration: duration)
         let visibleThumbnailsCount = Int(ceil(frame.width / thumbnailSize.width))
         let thumbnailCount = Int(ceil(newContentSize.width / thumbnailSize.width))
         addThumbnailViews(thumbnailCount, size: thumbnailSize)
-        let timesForThumbnail = getThumbnailTimes(for: asset, numberOfThumbnails: thumbnailCount)
+        let timesForThumbnail = getThumbnailTimes(for: asset, numberOfThumbnails: thumbnailCount, startTime: startTime)
         generateImages(for: asset, at: timesForThumbnail, with: thumbnailSize, visibleThumnails: visibleThumbnailsCount)
     }
-
+    
     private func getThumbnailFrameSize(from asset: AVAsset) -> CGSize? {
         guard let track = asset.tracks(withMediaType: AVMediaType.video).first else { return nil}
 
         let assetSize = track.naturalSize.applying(track.preferredTransform)
 
+        if frame.height == 0 {
+            frame.size.height = self.thumnailHeight
+        }
+
         let height = frame.height
-        let ratio = assetSize.width / assetSize.height
+        let ratio = (assetSize.width) / (assetSize.height)
         let width = height * ratio
-        return CGSize(width: abs(width), height: abs(height))
+        return CGSize(width: abs(self.thumbnailWidth), height: abs(height))
     }
 
     private func removeFormerThumbnails() {
         contentView.subviews.forEach({ $0.removeFromSuperview() })
     }
 
-    private func setContentSize(for asset: AVAsset) -> CGSize {
+    private func setContentSize(for asset: AVAsset, duration: Float! = 1.0) -> CGSize {
 
-        let contentWidthFactor = CGFloat(max(1, asset.duration.seconds / maxDuration))
+        let contentWidthFactor = CGFloat(max(1,( asset.duration.seconds) / maxDuration))
         widthConstraint?.isActive = false
         widthConstraint = contentView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: contentWidthFactor)
         widthConstraint?.isActive = true
@@ -106,7 +129,7 @@ class AssetVideoScrollView: UIScrollView {
                 thumbnailView.contentMode = .scaleAspectFill
             } else {
                 thumbnailView.frame.size = size
-                thumbnailView.contentMode = .scaleAspectFit
+                thumbnailView.contentMode = .scaleAspectFill
             }
 
             thumbnailView.frame.origin = CGPoint(x: CGFloat(index) * size.width, y: 0)
@@ -114,17 +137,29 @@ class AssetVideoScrollView: UIScrollView {
             contentView.addSubview(thumbnailView)
         }
     }
-
-    private func getThumbnailTimes(for asset: AVAsset, numberOfThumbnails: Int) -> [NSValue] {
+//
+//    private func getThumbnailTimes(for asset: AVAsset, numberOfThumbnails: Int) -> [NSValue] {
+//        let timeIncrement = (asset.duration.seconds * 1000) / Double(numberOfThumbnails)
+//        var timesForThumbnails = [NSValue]()
+//        for index in 0..<numberOfThumbnails {
+//            let cmTime = CMTime(value: Int64(timeIncrement * Float64(index)), timescale: 1000)
+//            let nsValue = NSValue(time: cmTime)
+//            timesForThumbnails.append(nsValue)
+//        }
+//        return timesForThumbnails
+//    }
+    
+    private func getThumbnailTimes(for asset: AVAsset, numberOfThumbnails: Int, startTime: Float64) -> [NSValue] {
         let timeIncrement = (asset.duration.seconds * 1000) / Double(numberOfThumbnails)
         var timesForThumbnails = [NSValue]()
         for index in 0..<numberOfThumbnails {
-            let cmTime = CMTime(value: Int64(timeIncrement * Float64(index)), timescale: 1000)
+            let cmTime = CMTime(value: Int64((startTime * 1000) + (timeIncrement * Float64(index))), timescale: 1000)
             let nsValue = NSValue(time: cmTime)
             timesForThumbnails.append(nsValue)
         }
         return timesForThumbnails
     }
+
 
     private func generateImages(for asset: AVAsset, at times: [NSValue], with maximumSize: CGSize, visibleThumnails: Int) {
         generator = AVAssetImageGenerator(asset: asset)
